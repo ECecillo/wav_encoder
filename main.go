@@ -197,22 +197,38 @@ func WriteWavHeader(writer *bufio.Writer, wavFileHeader *WavHeader) {
 func WriteWavSound(writer *bufio.Writer, wavFileHeader *WavHeader) {
 	// Variable to make a sound
 	var duration int = 2
-	// var maxAmplitude int = 32760 // = 16 bits - 1 bits pour le signe, donc 15 bits.
+	var maxAmplitude int = 32760 // = 16 bits - 1 bits pour le signe, donc 15 bits.
 	var frequency float32 = 440
 
 	nsamps := int(wavFileHeader.FORMAT_SUBCHUNK.SAMPLE_RATE) * duration
 	angle := 2 * math.Pi * float64(frequency)
 
 	for i := 0; i < nsamps; i++ {
-		// amplitude := float64(i) / float64(int(wavFileHeader.FORMAT_SUBCHUNK.SAMPLE_RATE)*maxAmplitude)
-		// value := math.Sin(angle * float64(i) / float64(wavFileHeader.FORMAT_SUBCHUNK.SAMPLE_RATE))
+		amplitude := float64(i) / float64(int(wavFileHeader.FORMAT_SUBCHUNK.SAMPLE_RATE)*maxAmplitude)
+		value := math.Sin(angle * float64(i) / float64(wavFileHeader.FORMAT_SUBCHUNK.SAMPLE_RATE))
 
-		// channel1 := float32(amplitude*value) / 2                     // Goes high
-		// channel2 := float32(float64(maxAmplitude) - amplitude*value) // Low pitch
+		channel1 := float32(amplitude*value) / 2                     // Goes high
+		channel2 := float32(float64(maxAmplitude) - amplitude*value) // Low pitch
 
-		binary.Write(writer, binary.LittleEndian, uint32(angle*float64(frequency)*float64(i)))
-		binary.Write(writer, binary.LittleEndian, uint32(angle*float64(frequency)*float64(i)))
+		binary.Write(writer, binary.LittleEndian, channel1)
+		binary.Write(writer, binary.LittleEndian, channel2)
 	}
+}
+
+func writeWAVDataSizeToBuffer(writer *os.File, dataSize int32) {
+	_, err := writer.Seek(40, 0) // Position de SUBCHUNK2_SIZE dans le fichier
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	binary.Write(writer, binary.LittleEndian, dataSize)
+
+	_, err = writer.Seek(4, 0) // Position de CHUNK_SIZE dans le fichier
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	binary.Write(writer, binary.LittleEndian, dataSize-8)
 }
 
 func main() {
@@ -263,20 +279,7 @@ func main() {
 	dataSize := endPos - startPos
 	wavFileHeader.DATA_SUBCHUNK.SUBCHUNK2_SIZE = int32(dataSize)
 	wavFileHeader.RIFF_CHUNK.CHUNK_SIZE = int32(endPos) - 8
-
-	_, err = wav.Seek(40, 0) // Position de SUBCHUNK2_SIZE dans le fichier
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	binary.Write(wav, binary.LittleEndian, wavFileHeader.DATA_SUBCHUNK.SUBCHUNK2_SIZE)
-
-	_, err = wav.Seek(4, 0) // Position de CHUNK_SIZE dans le fichier
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	binary.Write(wav, binary.LittleEndian, wavFileHeader.RIFF_CHUNK.CHUNK_SIZE)
+	writeWAVDataSizeToBuffer(wav, dataSize)
 
 	fmt.Println("Ecriture terminé 📝 !")
 	fmt.Println("WAV Header 💿", wavFileHeader)
